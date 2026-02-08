@@ -123,7 +123,7 @@ if (!GOOGLE_SERVICE_ACCOUNT_KEY) {
 }
 
 const REKAPAN_SHEET = 'REKAPAN QUALITY';
-const USER_SHEET = 'USER';
+const USER_SHEET = 'MASTER';
 
 // === Setup Google Sheets API ===
 let serviceAccount;

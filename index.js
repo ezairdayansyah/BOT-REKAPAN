@@ -31,7 +31,7 @@ function parseAktivasi(text, userRow, username) {
     nikOnt: '',
     stbId: '',
     nikStb: '',
-    teknisi: (userRow && userRow[1]) ? (userRow[1] || username).replace('@', '') : (username || ''),
+    teknisi: (userRow && userRow[8]) ? (userRow[8] || username).replace('@', '') : (username || ''),  // Index 8 = USERNAME TELEGRAM
   };
 
   // Regex patterns object - mudah di-maintain dan di-update
@@ -302,14 +302,29 @@ async function sendCSVFile(chatId, csvContent, filename, options = {}) {
 async function getUserData(username) {
   try {
     const data = await getSheetData(MASTER_SHEET);
+    console.log(`[DEBUG] Checking username: @${username}`);
+    console.log(`[DEBUG] Total users in MASTER sheet: ${data.length - 1}`);
+    
+    if (!data || data.length <= 1) {
+      console.log('[DEBUG] No users found in MASTER sheet');
+      return null;
+    }
+    
     for (let i = 1; i < data.length; i++) {
-      const userSheetUsername = (data[i][1] || '').replace('@', '').toLowerCase();
-      const inputUsername = (username || '').replace('@', '').toLowerCase();
-      const userStatus = (data[i][3] || '').toUpperCase();
+      const userSheetUsername = (data[i][8] || '').replace('@', '').toLowerCase().trim();  // Kolom I (index 8)
+      const userRole = (data[i][9] || '').toUpperCase().trim();                            // Kolom J (index 9)
+      const userStatus = (data[i][10] || '').toUpperCase().trim();                         // Kolom K (index 10)
+      const inputUsername = (username || '').replace('@', '').toLowerCase().trim();
+      
+      console.log(`[DEBUG] Row ${i}: Username="${userSheetUsername}", Role="${userRole}", Status="${userStatus}", Match=${userSheetUsername === inputUsername}`);
+      
       if (userSheetUsername === inputUsername && userStatus === 'AKTIF') {
+        console.log(`[DEBUG] User found and AKTIF!`);
         return data[i];
       }
     }
+    
+    console.log(`[DEBUG] User not found or not AKTIF`);
     return null;
   } catch (error) {
     console.error('Error getting user data:', error);
@@ -320,7 +335,7 @@ async function getUserData(username) {
 // === Helper: Cek admin ===
 async function isAdmin(username) {
   const user = await getUserData(username);
-  return user && (user[2] || '').toUpperCase() === 'ADMIN';
+  return user && (user[9] || '').toUpperCase() === 'ADMIN';  // Kolom J (index 9) = ROLE
 }
 
 // === Helper: Get today's date string ===
@@ -461,7 +476,10 @@ bot.on('message', async (msg) => {
   const chatType = msg.chat.type;
   
   // Log untuk debugging
-  console.log(`Message received - Chat: ${chatId}, User: @${username}, Type: ${chatType}, Text: ${text.substring(0, 50)}`);
+  console.log(`\n========================================`);
+  console.log(`[MESSAGE] Chat: ${chatId}, User: @${username}, Type: ${chatType}`);
+  console.log(`[MESSAGE] Text: ${text.substring(0, 100)}`);
+  console.log(`========================================`);
   
   try {
     // === Hanya proses /aktivasi di group, command lain diabaikan ===
@@ -477,7 +495,7 @@ bot.on('message', async (msg) => {
       }
       
       const data = await getSheetData(REKAPAN_SHEET);
-      const userTeknisi = (user[1] || username).replace('@', '').toLowerCase();
+      const userTeknisi = (user[8] || username).replace('@', '').toLowerCase();  // Index 8 = USERNAME TELEGRAM
       const userActivations = [];
       
       // Headers untuk CSV (18 kolom sesuai sheet baru)
@@ -769,7 +787,7 @@ bot.on('message', async (msg) => {
       }
       
       const data = await getSheetData(REKAPAN_SHEET);
-      const userTeknisi = (user[1] || username).replace('@', '').toLowerCase();
+      const userTeknisi = (user[8] || username).replace('@', '').toLowerCase();  // Index 8 = USERNAME TELEGRAM
       let count = 0;
       let channelMap = {}, workzoneMap = {};
       
@@ -785,7 +803,7 @@ bot.on('message', async (msg) => {
         }
       }
       
-      let msg = `📊 <b>STATISTIK ANDA</b>\n👤 Teknisi: ${user[1] || username}\n📈 Total Aktivasi: ${count} SSL\n\n`;
+      let msg = `📊 <b>STATISTIK ANDA</b>\n👤 Teknisi: ${user[8] || username}\n📈 Total Aktivasi: ${count} SSL\n\n`;
       
       if (count === 0) {
         msg += '⚠️ Belum ada data aktivasi yang tercatat untuk Anda.\n';
@@ -885,18 +903,31 @@ bot.on('message', async (msg) => {
     
     // === /aktivasi: parsing dengan struktur sheet 18 kolom baru ===
     else if (/^\/aktivasi\b/i.test(text)) {
+      console.log(`[AKTIVASI] Username: @${username}`);
+      
+      if (!username) {
+        return sendTelegram(chatId, '❌ Anda harus memiliki username Telegram untuk menggunakan bot ini. Silakan atur username di pengaturan Telegram Anda.', { reply_to_message_id: messageId });
+      }
+      
       const user = await getUserData(username);
       if (!user) {
-        return sendTelegram(chatId, '❌ Anda tidak terdaftar sebagai user aktif.', { reply_to_message_id: messageId });
+        console.log(`[AKTIVASI] User not found or not AKTIF for @${username}`);
+        return sendTelegram(chatId, `❌ User @${username} tidak terdaftar sebagai user aktif di MASTER sheet.\n\nSilakan hubungi admin untuk mendaftarkan username Anda.`, { reply_to_message_id: messageId });
       }
+      
+      console.log(`[AKTIVASI] User found: ${user[1]}`);
       
       const inputText = text.replace(/^\/aktivasi\s*/i, '').trim();
       if (!inputText) {
         return sendTelegram(chatId, 'Silakan kirim data aktivasi setelah /aktivasi.', { reply_to_message_id: messageId });
       }
       
+      console.log(`[AKTIVASI] Parsing input text...`);
+      
       // Parse data menggunakan function baru dengan 18 kolom
       const parsed = parseAktivasi(inputText, user, username);
+      
+      console.log(`[AKTIVASI] Parsed AO: ${parsed.ao}, Channel: ${parsed.channel}`);
       
       // Validasi minimal: AO harus ada
       if (!parsed.ao) {
@@ -938,7 +969,10 @@ bot.on('message', async (msg) => {
         parsed.teknisi         // R: TEKNISI
       ];
       
+      console.log(`[AKTIVASI] Appending row to sheet...`);
       await appendSheetData(REKAPAN_SHEET, row);
+      
+      console.log(`[AKTIVASI] Data saved successfully!`);
       
       // Tampilkan konfirmasi
       let confirmMsg = '✅ Data berhasil disimpan ke sheet, GASPOLLL 🚀🚀!\n\n';

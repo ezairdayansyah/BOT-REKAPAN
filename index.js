@@ -123,7 +123,7 @@ if (!GOOGLE_SERVICE_ACCOUNT_KEY) {
 }
 
 const REKAPAN_SHEET = 'REKAPAN QUALITY';
-const USER_SHEET = 'MASTER';
+const MASTER_SHEET = 'MASTER';
 
 // === Setup Google Sheets API ===
 let serviceAccount;
@@ -301,7 +301,7 @@ async function sendCSVFile(chatId, csvContent, filename, options = {}) {
 // === Helper: Cek user aktif dengan error handling ===
 async function getUserData(username) {
   try {
-    const data = await getSheetData(USER_SHEET);
+    const data = await getSheetData(MASTER_SHEET);
     for (let i = 1; i < data.length; i++) {
       const userSheetUsername = (data[i][1] || '').replace('@', '').toLowerCase();
       const inputUsername = (username || '').replace('@', '').toLowerCase();

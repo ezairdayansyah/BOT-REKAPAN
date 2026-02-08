@@ -1,0 +1,17 @@
+{
+  "name": "bot-telegram-rekapan",
+  "version": "2.0.0",
+  "description": "Telegram bot untuk REKAPAN QUALITY",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.65.0",
+    "googleapis": "^133.0.0",
+    "pdfkit": "^0.13.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

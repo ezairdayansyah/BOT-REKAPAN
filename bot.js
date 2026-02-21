@@ -696,23 +696,41 @@ bot.on('message', async (msg) => {
         channelMap[channel] = (channelMap[channel] || 0) + 1;
       });
       
-      const dateLabel = customDate ? `Tanggal: ${customDate}` : `Tanggal: ${getTodayDateString()}`;
-      let msg = `📊 <b>LAPORAN HARIAN</b>\n${dateLabel}\nTotal: ${total} SSL\n\n`;
+      const dateLabel = customDate || getTodayDateString();
+      let msg = `📊 <b>LAPORAN HARIAN</b>\nTanggal: ${dateLabel}\nTotal: ${total} SSL\n\n`;
       
       if (total === 0) {
         msg += '⚠️ Tidak ada data.\n';
       } else {
-        msg += `<b>Teknisi Aktif:</b> ${Object.keys(teknisiMap).length}\n`;
-        msg += `<b>Workzone:</b> ${Object.keys(workzoneMap).length}\n`;
-        msg += `<b>Channel:</b> ${Object.keys(channelMap).length}\n\n`;
+        msg += `Teknisi Aktif: ${Object.keys(teknisiMap).length}\n`;
+        msg += `Workzone: ${Object.keys(workzoneMap).length}\n`;
+        msg += `Channel: ${Object.keys(channelMap).length}\n\n`;
         
         msg += '<b>TOP TEKNISI:</b>\n';
         Object.entries(teknisiMap).sort((a, b) => b[1] - a[1]).slice(0, 10).forEach(([t, c], i) => {
           msg += `${i + 1}. ${t}: ${c} SSL\n`;
         });
+        
+        msg += '\n<b>PERFORMA WORKZONE:</b>\n';
+        Object.entries(workzoneMap).sort((a, b) => b[1] - a[1]).forEach(([w, c], i) => {
+          msg += `${i + 1}. ${w}: ${c} SSL\n`;
+        });
+        
+        msg += '\n<b>PERFORMA OWNER:</b>\n';
+        Object.entries(channelMap).sort((a, b) => b[1] - a[1]).forEach(([ch, c], i) => {
+          msg += `${i + 1}. ${ch}: ${c} SSL\n`;
+        });
       }
       
-      msg += `\n⏰ ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`;
+      // Format timestamp dd/m/yyyy hh.mm.ss
+      const now = new Date();
+      const jktTime = new Date(now.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }));
+      const dateStr = jktTime.getDate() + '/' + (jktTime.getMonth() + 1) + '/' + jktTime.getFullYear();
+      const timeStr = String(jktTime.getHours()).padStart(2, '0') + '.' + 
+                      String(jktTime.getMinutes()).padStart(2, '0') + '.' + 
+                      String(jktTime.getSeconds()).padStart(2, '0');
+      
+      msg += `\n⏰ ${dateStr} ${timeStr} WIB`;
       return sendTelegram(chatId, msg, { reply_to_message_id: messageId });
     }
     

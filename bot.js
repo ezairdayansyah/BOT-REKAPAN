@@ -723,12 +723,27 @@ bot.on('message', async (msg) => {
       }
       
       // Format timestamp dd/m/yyyy hh.mm.ss
-      const now = new Date();
-      const jktTime = new Date(now.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }));
-      const dateStr = jktTime.getDate() + '/' + (jktTime.getMonth() + 1) + '/' + jktTime.getFullYear();
-      const timeStr = String(jktTime.getHours()).padStart(2, '0') + '.' + 
-                      String(jktTime.getMinutes()).padStart(2, '0') + '.' + 
-                      String(jktTime.getSeconds()).padStart(2, '0');
+      const formatter = new Intl.DateTimeFormat('id-ID', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZone: 'Asia/Jakarta',
+        hour12: false
+      });
+      
+      const parts = formatter.formatToParts(new Date());
+      const partsMap = {};
+      parts.forEach(part => {
+        if (part.type !== 'literal') {
+          partsMap[part.type] = part.value;
+        }
+      });
+      
+      const dateStr = partsMap.day + '/' + partsMap.month + '/' + partsMap.year;
+      const timeStr = partsMap.hour + '.' + partsMap.minute + '.' + partsMap.second;
       
       msg += `\n⏰ ${dateStr} ${timeStr} WIB`;
       return sendTelegram(chatId, msg, { reply_to_message_id: messageId });

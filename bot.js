@@ -417,6 +417,46 @@ function parseIndonesianDate(dateStr) {
   return null;
 }
 
+// === Helper: Parse nama bulan Indonesia ke index ===
+function parseMonthName(name) {
+  const months = {
+    'januari': 0, 'februari': 1, 'maret': 2, 'april': 3,
+    'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7,
+    'september': 8, 'oktober': 9, 'november': 10, 'desember': 11,
+    'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3,
+    'jun': 5, 'jul': 6, 'ags': 7, 'aug': 7,
+    'sep': 8, 'okt': 9, 'oct': 9, 'nov': 10, 'des': 11, 'dec': 11
+  };
+  return months[(name || '').toLowerCase().trim()];
+}
+
+// === Helper: Generate sektor breakdown dari data rows ===
+function generateSektorBreakdown(dataRows, unit = 'SSL') {
+  let result = '';
+  for (const [sektorName, stoList] of Object.entries(SEKTOR_MAP)) {
+    let sektorTotal = 0;
+    const stoCountMap = {};
+    stoList.forEach(sto => { stoCountMap[sto] = 0; });
+
+    dataRows.forEach(row => {
+      const wz = (row[7] || '').toUpperCase().trim();
+      for (const sto of stoList) {
+        if (wz.startsWith(sto) || wz.includes(sto)) {
+          stoCountMap[sto]++;
+          sektorTotal++;
+          break;
+        }
+      }
+    });
+
+    result += `\n📍 <b>SEKTOR ${sektorName}</b> (${sektorTotal} ${unit})\n`;
+    stoList.forEach(sto => {
+      result += `• ${sto}: ${stoCountMap[sto]}\n`;
+    });
+  }
+  return result;
+}
+
 function filterDataByPeriod(data, period, customDate = null) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -429,11 +469,18 @@ function filterDataByPeriod(data, period, customDate = null) {
     const datePattern = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/;
     const yearMatch = customDate.match(yearOnlyPattern);
     const match = customDate.match(datePattern);
+    const monthIdx = parseMonthName(customDate);
 
     if (yearMatch && period === 'yearly') {
       const year = parseInt(yearMatch[1]);
       startDate = new Date(year, 0, 1);
       endDate = new Date(year, 11, 31);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (monthIdx !== undefined && period === 'monthly') {
+      // Support nama bulan: /monthly januari
+      const year = today.getFullYear();
+      startDate = new Date(year, monthIdx, 1);
+      endDate = new Date(year, monthIdx + 1, 0);
       endDate.setHours(23, 59, 59, 999);
     } else if (match) {
       const day = parseInt(match[1]);
@@ -673,18 +720,16 @@ bot.on('message', async (msg) => {
       msg += `• Minggu ini: <b>${weekData.length}</b> SSL\n`;
       msg += `• Bulan ini: <b>${monthData.length}</b> SSL\n`;
       msg += `• Tahun ini: <b>${yearData.length}</b> SSL\n`;
-      msg += `• Total keseluruhan: <b>${userData.length}</b> SSL\n\n`;
+      msg += `• Total keseluruhan: <b>${userData.length}</b> SSL\n`;
 
       if (userData.length === 0) {
-        msg += '⚠️ Belum ada data aktivasi.\n';
+        msg += '\n⚠️ Belum ada data aktivasi.\n';
       } else {
-        msg += '<b>Per Channel:</b>\n';
+        msg += generateSektorBreakdown(userData, 'SSL');
+
+        msg += '\n<b>Per Channel:</b>\n';
         Object.entries(channelMap).sort((a, b) => b[1] - a[1]).forEach(([c, cnt]) => {
           msg += `• ${c}: ${cnt}\n`;
-        });
-        msg += '\n<b>Per Workzone:</b>\n';
-        Object.entries(workzoneMap).sort((a, b) => b[1] - a[1]).forEach(([w, cnt]) => {
-          msg += `• ${w}: ${cnt}\n`;
         });
         msg += '\n💾 <i>Gunakan /exportcari untuk download data lengkap</i>';
       }
@@ -757,21 +802,14 @@ bot.on('message', async (msg) => {
       if (total === 0) {
         msg += '⚠️ Tidak ada data.\n';
       } else {
-        msg += `Teknisi Aktif: ${Object.keys(teknisiMap).length}\n`;
-        msg += `Workzone: ${Object.keys(workzoneMap).length}\n`;
-        msg += `Channel: ${Object.keys(channelMap).length}\n\n`;
+        msg += generateSektorBreakdown(filteredData, 'SSL');
 
-        msg += '<b>TOP TEKNISI:</b>\n';
+        msg += '\n<b>TOP TEKNISI:</b>\n';
         Object.entries(teknisiMap).sort((a, b) => b[1] - a[1]).forEach(([t, c], i) => {
           msg += `${i + 1}. ${t}: ${c} SSL\n`;
         });
 
-        msg += '\n<b>PERFORMA WORKZONE:</b>\n';
-        Object.entries(workzoneMap).sort((a, b) => b[1] - a[1]).forEach(([w, c], i) => {
-          msg += `${i + 1}. ${w}: ${c} SSL\n`;
-        });
-
-        msg += '\n<b>PERFORMA OWNER:</b>\n';
+        msg += '\n<b>PERFORMA CHANNEL:</b>\n';
         Object.entries(channelMap).sort((a, b) => b[1] - a[1]).forEach(([ch, c], i) => {
           msg += `${i + 1}. ${ch}: ${c} SSL\n`;
         });
@@ -834,17 +872,12 @@ bot.on('message', async (msg) => {
       if (total === 0) {
         msg += '⚠️ Tidak ada data aktivasi untuk periode ini.\n';
       } else {
-        msg += `Teknisi Aktif: ${Object.keys(teknisiMap).length}\nWorkzone: ${Object.keys(workzoneMap).length}\nChannel: ${Object.keys(channelMap).length}\n\n`;
+        msg += generateSektorBreakdown(filteredData, 'SSL');
 
-        msg += '<b>TOP 10 TEKNISI:</b>\n';
+        msg += '\n<b>TOP 10 TEKNISI:</b>\n';
         Object.entries(teknisiMap).sort((a, b) => b[1] - a[1]).slice(0, 10).forEach(([t, c], i) => {
           const medal = i < 3 ? ['🥇', '🥈', '🥉'][i] : `${i + 1}.`;
           msg += `${medal} ${t}: ${c} SSL\n`;
-        });
-
-        msg += '\n<b>PERFORMA WORKZONE:</b>\n';
-        Object.entries(workzoneMap).sort((a, b) => b[1] - a[1]).forEach(([w, c], i) => {
-          msg += `${i + 1}. ${w}: ${c} SSL\n`;
         });
 
         msg += '\n<b>PERFORMA CHANNEL:</b>\n';
@@ -881,24 +914,26 @@ bot.on('message', async (msg) => {
         channelMap[channel] = (channelMap[channel] || 0) + 1;
       });
 
-      const periodLabel = customDate ? `Bulan dari: ${customDate}` : 'Bulan ini';
+      const monthNamesCap = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      let periodLabel;
+      if (customDate) {
+        const mIdx = parseMonthName(customDate);
+        periodLabel = mIdx !== undefined ? `${monthNamesCap[mIdx]} ${new Date().getFullYear()}` : `Bulan dari: ${customDate}`;
+      } else {
+        periodLabel = `${monthNamesCap[new Date().getMonth()]} ${new Date().getFullYear()}`;
+      }
       const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
-      let msg = `📅 <b>LAPORAN AKTIVASI BULANAN</b>\n${periodLabel}\nTotal Aktivasi: ${total} SSL\n\n`;
+      let msg = `📅 <b>LAPORAN AKTIVASI BULANAN</b>\nPeriode: ${periodLabel}\nTotal Aktivasi: ${total} SSL\n\n`;
 
       if (total === 0) {
         msg += '⚠️ Tidak ada data aktivasi untuk periode ini.\n';
       } else {
-        msg += `Teknisi Aktif: ${Object.keys(teknisiMap).length}\nWorkzone: ${Object.keys(workzoneMap).length}\nChannel: ${Object.keys(channelMap).length}\nRata-rata/hari: ${(total / daysInMonth).toFixed(1)} SSL\n\n`;
+        msg += generateSektorBreakdown(filteredData, 'SSL');
 
-        msg += '<b>TOP 15 TEKNISI:</b>\n';
+        msg += '\n<b>TOP 15 TEKNISI:</b>\n';
         Object.entries(teknisiMap).sort((a, b) => b[1] - a[1]).slice(0, 15).forEach(([t, c], i) => {
           const medal = i < 3 ? ['🥇', '🥈', '🥉'][i] : `${i + 1}.`;
           msg += `${medal} ${t}: ${c} SSL\n`;
-        });
-
-        msg += '\n<b>PERFORMA WORKZONE:</b>\n';
-        Object.entries(workzoneMap).sort((a, b) => b[1] - a[1]).forEach(([w, c], i) => {
-          msg += `${i + 1}. ${w}: ${c} SSL\n`;
         });
 
         msg += '\n<b>PERFORMA CHANNEL:</b>\n';
@@ -950,8 +985,6 @@ bot.on('message', async (msg) => {
       if (total === 0) {
         msg += '⚠️ Tidak ada data aktivasi untuk periode ini.\n';
       } else {
-        msg += `Teknisi Aktif: ${Object.keys(teknisiMap).length}\nWorkzone: ${Object.keys(workzoneMap).length}\nChannel: ${Object.keys(channelMap).length}\nRata-rata/bulan: ${(total / 12).toFixed(1)} SSL\nRata-rata/hari: ${(total / 365).toFixed(1)} SSL\n\n`;
-
         // Tabel per bulan
         msg += '<b>📊 BREAKDOWN PER BULAN:</b>\n';
         for (let m = 0; m < 12; m++) {
@@ -960,15 +993,12 @@ bot.on('message', async (msg) => {
           msg += `${monthNames[m]}: ${count} SSL ${bar}\n`;
         }
 
+        msg += generateSektorBreakdown(filteredData, 'SSL');
+
         msg += '\n<b>🏆 TOP 20 TEKNISI:</b>\n';
         Object.entries(teknisiMap).sort((a, b) => b[1] - a[1]).slice(0, 20).forEach(([t, c], i) => {
           const medal = i < 3 ? ['🥇', '🥈', '🥉'][i] : `${i + 1}.`;
           msg += `${medal} ${t}: ${c} SSL\n`;
-        });
-
-        msg += '\n<b>PERFORMA WORKZONE:</b>\n';
-        Object.entries(workzoneMap).sort((a, b) => b[1] - a[1]).slice(0, 10).forEach(([w, c], i) => {
-          msg += `${i + 1}. ${w}: ${c} SSL\n`;
         });
 
         msg += '\n<b>PERFORMA CHANNEL:</b>\n';
@@ -1101,7 +1131,9 @@ bot.on('message', async (msg) => {
       if (sortedTeknisi.length === 0) {
         msg += '⚠️ Belum ada data.\n';
       } else {
-        msg += `Total Teknisi: ${sortedTeknisi.length}\n\n`;
+        msg += generateSektorBreakdown(filteredData, 'SSL');
+
+        msg += `\nTotal Teknisi: ${sortedTeknisi.length}\n\n`;
         msg += '<b>TOP 20:</b>\n';
 
         sortedTeknisi.slice(0, 20).forEach(([teknisi, count], index) => {
@@ -1143,16 +1175,13 @@ bot.on('message', async (msg) => {
       }
 
       let msg = '📊 <b>RINGKASAN AKTIVASI TOTAL</b>\n';
-      msg += `TOTAL KESELURUHAN: ${total} SSL\n\n`;
+      msg += `TOTAL KESELURUHAN: ${total} SSL\n`;
 
-      msg += '<b>BERDASARKAN CHANNEL:</b>\n';
+      msg += generateSektorBreakdown(data.slice(1), 'SSL');
+
+      msg += '\n<b>BERDASARKAN CHANNEL:</b>\n';
       Object.entries(channelMap).sort((a, b) => b[1] - a[1]).forEach(([ch, c]) => {
         msg += `• ${ch}: ${c}\n`;
-      });
-
-      msg += '\n<b>BERDASARKAN WORKZONE:</b>\n';
-      Object.entries(workzoneMap).sort((a, b) => b[1] - a[1]).forEach(([w, c]) => {
-        msg += `• ${w}: ${c}\n`;
       });
 
       let teknisiArr = Object.entries(teknisiMap).map(([name, count]) => ({ name, count }));
